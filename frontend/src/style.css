@@ -1,0 +1,2 @@
+/* Compatibility entry point. App.jsx imports dashboard.css directly. */
+@import "./dashboard.css";
