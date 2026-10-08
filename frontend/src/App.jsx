@@ -21,8 +21,10 @@ export function Workspace({ session, onLogout, onRefresh, onSessionVerified, the
   const [operatorInput, setOperatorInput] = useState(session.operator || String(session.brand.id));
   const [operatorVerified, setOperatorVerified] = useState(true);
   
-  // View mode toggle & modal popup state
+  // View mode, Metric Tab, and Horizon state
   const [viewMode, setViewMode] = useState("cards"); // "cards" or "charts"
+  const [activeMetricTab, setActiveMetricTab] = useState("Net contribution");
+  const [timeHorizon, setTimeHorizon] = useState("30D");
   const [activeModalItem, setActiveModalItem] = useState(null);
 
   const currentSnapshot = useRef(null);
@@ -116,16 +118,16 @@ export function Workspace({ session, onLogout, onRefresh, onSessionVerified, the
   return <div className="shell"><aside className="sidebar"><button type="button" className="wordmark" onClick={onRefresh} disabled={busy} aria-label="Refresh dashboard" title="Refresh dashboard">SYNAPSE<span aria-hidden="true">&nbsp;</span></button>
     <div className="workspace-label">WORKSPACE</div><strong className="brand-name">{session.brand.name}</strong>
     <nav><a href="#overview">Overview</a><a href="#revenue">SKU performance</a><a href="#allocation">Budget allocation</a><a href="#diagnostics">Diagnostics</a><a href="#history">Decision audit</a></nav>
-  </aside><main className="main"><header className="topbar"><div><span className="eyebrow">DATAQUEST 3.0</span><span className="header-context">Advertising decision cockpit</span></div><div className="header-controls">
+  </aside><main className="main"><header className="topbar"><div><span className="header-context">Advertising Decision Cockpit</span></div><div className="header-controls">
     <form className="operator-control" onSubmit={verifyOperator}>
       <label htmlFor="header-operator">Operator / workspace ID</label><input id="header-operator" type="text" value={operatorInput}
         onChange={event => { setOperatorInput(event.target.value); setOperatorVerified(false); }} maxLength={100} autoComplete="off" spellCheck={false} disabled={busy} required
         title="Enter this workspace's provisioned ID or profile name. Sign in again to change workspace access." />
       <button className="button" disabled={busy || !operatorInput.trim()}>Verify</button>
       <span className={'operator-confirmation ' + (operatorVerified ? 'healthy' : 'muted')} role="status">{operatorVerified ? 'Workspace verified' : 'Edit pending verification'}</span>
-    </form><span className="limit-indicator">AI limit: {session.ai_limit_per_day}/day</span><ThemeToggle theme={theme} onChange={onThemeChange} /></div></header>
-    <div className="content" id="overview"><div className="page-heading"><div><span className="eyebrow">BRAND / {session.brand.name}</span><h1>Contribution & allocation</h1>
-      <p className="muted">SKU economics, inventory constraints and SciPy recommendations.</p></div><SourcePanel busy={busy} onSync={sync} onError={setError} /></div>
+    </form></span><ThemeToggle theme={theme} onChange={onThemeChange} /></div></header>
+    <div className="content" id="overview"><div className="page-heading"><div><span className="eyebrow">BRAND = {session.brand.name}</span><h1>Contribution & allocation</h1>
+      <p className="muted"></p></div><SourcePanel busy={busy} onSync={sync} onError={setError} /></div>
       {error && <div className="notice error" role="alert">{error}</div>}
       <div className="snapshot-line"><span className="label">{snapshot ? snapshot.data_mode === 'mock' ? 'MOCK DATA' : 'UPLOADED SNAPSHOT' : 'NO DATA'}</span>
         <span className="muted">{snapshot ? 'Snapshot #' + snapshot.snapshot_id + ' / checked every 30 seconds' : loaded ? 'Import your source data to begin.' : 'Loading workspace...'}</span></div>
@@ -152,67 +154,120 @@ export function Workspace({ session, onLogout, onRefresh, onSessionVerified, the
             onClick={() => setViewMode('charts')}
             style={{ padding: '6px 14px', background: viewMode === 'charts' ? 'var(--accent-bg, #0f172a)' : 'transparent', color: '#fff', border: 'none', borderRadius: '3px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
           >
-            Comparative Performance View
+            Financial Ticker View
           </button>
         </div>
       </div>
 
       {viewMode === 'charts' ? (
         <section id="revenue" style={{ marginBottom: '24px' }}>
-          <h2>SKU Comparative Efficiency Grid</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+          {/* Trading-Style Header & Horizon Toggles */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '16px', borderBottom: '1px solid #334155', paddingBottom: '12px' }}>
+            <div>
+              <h2 style={{ margin: '0 0 4px 0', fontSize: '18px', color: '#f8fafc' }}>SKU Performance Grid</h2>
+              <p style={{ margin: 0, fontSize: '12px', color: '#94a3b8' }}>Compact trading-style efficiency cards</p>
+            </div>
+            <div style={{ display: 'flex', gap: '6px', background: '#1e293b', padding: '3px', borderRadius: '6px', border: '1px solid #334155' }}>
+              {['7D', '30D', '90D'].map(h => (
+                <button
+                  key={h}
+                  type="button"
+                  onClick={() => setTimeHorizon(h)}
+                  style={{
+                    background: timeHorizon === h ? '#334155' : 'transparent',
+                    border: 'none',
+                    color: timeHorizon === h ? '#f8fafc' : '#94a3b8',
+                    padding: '4px 10px',
+                    borderRadius: '4px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  {h}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Metric Selector Pill Tabs (Visible ONLY in Financial Ticker View) */}
+          <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
+            {['Net contribution', 'ROAS', 'Revenue', 'Ad spend'].map(tab => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setActiveMetricTab(tab)}
+                style={{
+                  background: activeMetricTab === tab ? '#1e293b' : 'transparent',
+                  border: '1px solid',
+                  borderColor: activeMetricTab === tab ? '#38bdf8' : '#334155',
+                  color: activeMetricTab === tab ? '#f8fafc' : '#94a3b8',
+                  padding: '6px 16px',
+                  borderRadius: '20px',
+                  fontSize: '13px',
+                  fontWeight: activeMetricTab === tab ? 600 : 400,
+                  cursor: 'pointer'
+                }}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+
+          {/* Candlestick Ticker Grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
             {rows.map((item, idx) => {
-              const maxVal = Math.max(...rows.map(r => Math.max(r.revenue, r.spend * 5)), 1);
-              const revWidth = Math.min(Math.max((item.revenue / maxVal) * 100, 5), 100);
-              const spendWidth = Math.min(Math.max(((item.spend * 5) / maxVal) * 100, 5), 100);
+              const netContrib = item.revenue * item.margin - item.spend;
               const roas = item.spend > 0 ? (item.revenue / item.spend).toFixed(2) : '0.00';
+              const stockHorizon = horizon(item);
+              const isRisk = stockHorizon !== null && stockHorizon < 14;
+              const isMissing = stockHorizon === null;
 
               return (
                 <div 
                   key={idx} 
                   onClick={() => setActiveModalItem(item)}
                   style={{ 
-                    background: 'var(--panel-bg, #0f172a)', 
-                    border: '1px solid var(--border-color, #334155)', 
+                    background: '#0f172a', 
+                    border: '1px solid #334155', 
                     borderRadius: '6px', 
-                    padding: '18px', 
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease'
+                    padding: '20px', 
+                    cursor: 'pointer'
                   }}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                    <span style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-main, #f8fafc)' }}>{item.sku}</span>
-                    <span style={{ fontSize: '11px', background: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8', padding: '2px 6px', borderRadius: '4px' }}>
-                      ROAS: {roas}×
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                    <div>
+                      <h4 style={{ margin: '0 0 4px 0', color: '#f8fafc', fontSize: '15px' }}>{item.sku}</h4>
+                      <span style={{ fontSize: '12px', color: '#94a3b8' }}>ROAS {roas}×</span>
+                    </div>
+                    <span style={{ color: '#94a3b8', fontSize: '12px' }}>v</span>
+                  </div>
+
+                  <div style={{ margin: '12px 0' }}>
+                    <span style={{ fontSize: '12px', color: '#94a3b8', display: 'block' }}>{activeMetricTab}</span>
+                    <strong style={{ fontSize: '20px', color: netContrib < 0 ? '#f43f5e' : '#f8fafc' }}>
+                      {activeMetricTab === 'Net contribution' ? amount(netContrib) :
+                       activeMetricTab === 'ROAS' ? `${roas}×` :
+                       activeMetricTab === 'Revenue' ? amount(item.revenue) : amount(item.spend)}
+                    </strong>
+                  </div>
+
+                  {/* Financial Candlestick SVG Mockup */}
+                  <svg viewBox="0 0 300 70" style={{ width: '100%', height: '70px', margin: '8px 0' }}>
+                    <path d="M 0 50 Q 75 10, 150 35 T 300 20" fill="none" stroke="#38bdf8" strokeWidth="2" />
+                    {[[30, 40, 20, '#34d399'], [70, 55, 30, '#f43f5e'], [110, 45, 25, '#34d399'], [150, 35, 15, '#34d399'], [190, 48, 35, '#f43f5e'], [230, 30, 20, '#34d399'], [270, 25, 10, '#34d399']].map(([x, cy, h, color], cIdx) => (
+                      <g key={cIdx}>
+                        <line x1={x} y1={cy - h - 5} x2={x} y2={cy + h + 5} stroke={color} strokeWidth="1.5" />
+                        <rect x={x - 4} y={cy - h/2} width="8" height={h} fill={color} rx="1" />
+                      </g>
+                    ))}
+                  </svg>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px', paddingTop: '10px', borderTop: '1px solid #1e293b', fontSize: '12px' }}>
+                    <span style={{ color: '#94a3b8' }}>Margin {Math.round(item.margin * 100)}%</span>
+                    <span style={{ color: isRisk ? '#f43f5e' : isMissing ? '#fbbf24' : '#34d399', fontWeight: 500 }}>
+                      {isRisk ? 'Critical stock risk' : isMissing ? 'Inventory missing' : `${stockHorizon} days cover`}
                     </span>
-                  </div>
-
-                  {/* Proportional Comparative Bar Graphs (Spend vs Revenue) */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '14px', fontSize: '12px' }}>
-                    <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8', marginBottom: '3px' }}>
-                        <span>Revenue</span>
-                        <span style={{ color: '#f8fafc', fontWeight: 500 }}>{amount(item.revenue)}</span>
-                      </div>
-                      <div style={{ width: '100%', background: '#1e293b', height: '6px', borderRadius: '3px', overflow: 'hidden' }}>
-                        <div style={{ width: `${revWidth}%`, background: '#38bdf8', height: '100%', borderRadius: '3px' }} />
-                      </div>
-                    </div>
-
-                    <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8', marginBottom: '3px' }}>
-                        <span>Ad Spend</span>
-                        <span style={{ color: '#f8fafc', fontWeight: 500 }}>{amount(item.spend)}</span>
-                      </div>
-                      <div style={{ width: '100%', background: '#1e293b', height: '6px', borderRadius: '3px', overflow: 'hidden' }}>
-                        <div style={{ width: `${spendWidth}%`, background: '#f43f5e', height: '100%', borderRadius: '3px' }} />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #1e293b', paddingTop: '10px', fontSize: '12px', color: '#94a3b8' }}>
-                    <span>Margin: <strong style={{ color: '#f8fafc' }}>{Math.round(item.margin * 100)}%</strong></span>
-                    <span style={{ color: '#38bdf8' }}>Click for Inspector →</span>
                   </div>
                 </div>
               );
@@ -229,18 +284,18 @@ export function Workspace({ session, onLogout, onRefresh, onSessionVerified, the
       <footer>Projections are modeled estimates. No ad-platform budgets are changed automatically.</footer>
     </div></main>
 
-    {/* Floating Modal Popup for Clicked SKU Details */}
+    {/* Floating Modal Inspector */}
     {activeModalItem && (
       <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
         <div style={{ background: '#0f172a', border: '1px solid #334155', padding: '24px', borderRadius: '6px', width: '420px', color: '#f8fafc' }}>
-          <h3 style={{ margin: '0 0 8px 0', color: '#38bdf8' }}>Channel Inspector: {activeModalItem.sku}</h3>
+          <h3 style={{ margin: '0 0 4px 0', color: '#f8fafc' }}>Channel Inspector: {activeModalItem.sku}</h3>
           <p style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '16px' }}>Detailed financial breakdown and metrics snapshot.</p>
           
-          <div style={{ background: '#1e293b', padding: '12px', borderRadius: '4px', fontSize: '13px', marginBottom: '16px' }}>
-            <p style={{ margin: '6px 0', display: 'flex', justifyContent: 'space-between' }}><span>Revenue:</span> <strong>{amount(activeModalItem.revenue)}</strong></p>
-            <p style={{ margin: '6px 0', display: 'flex', justifyContent: 'space-between' }}><span>Ad Spend:</span> <strong>{amount(activeModalItem.spend)}</strong></p>
-            <p style={{ margin: '6px 0', display: 'flex', justifyContent: 'space-between' }}><span>Contribution Margin:</span> <strong>{Math.round(activeModalItem.margin * 100)}%</strong></p>
-            <p style={{ margin: '6px 0', display: 'flex', justifyContent: 'space-between' }}><span>Stock Cover Horizon:</span> <strong>{horizon(activeModalItem) !== null ? `${horizon(activeModalItem)} days` : 'Not supplied'}</strong></p>
+          <div style={{ background: '#1e293b', padding: '16px', borderRadius: '4px', fontSize: '13px', marginBottom: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: '#94a3b8' }}>Revenue:</span> <strong>{amount(activeModalItem.revenue)}</strong></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: '#94a3b8' }}>Ad Spend:</span> <strong>{amount(activeModalItem.spend)}</strong></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: '#94a3b8' }}>Contribution Margin:</span> <strong>{Math.round(activeModalItem.margin * 100)}%</strong></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: '#94a3b8' }}>Stock Cover Horizon:</span> <strong>{horizon(activeModalItem) !== null ? `${horizon(activeModalItem)} days` : '0 days'}</strong></div>
           </div>
 
           <button 
@@ -294,7 +349,7 @@ export function OperatorLogin({ onLogin = () => {} }) {
     finally { submitting.current = false; setBusy(false); }
   }
   return <main className="login-page"><div className="login-layout"><form className="panel login-form" onSubmit={submit}>
-    <span className="eyebrow">SYNAPSE / DATAQUEST 3.0</span><h1>Operator access</h1>
+    <span className="eyebrow">SYNAPSE</span><h1>Operator access</h1>
     <p className="muted">Authenticate with your provisioned workspace ID or name and API token.</p>
     <label>Operator / workspace ID<input type="text" name="operator" value={operator} onChange={e => setOperator(e.target.value)}
       autoComplete="username" autoCapitalize="none" spellCheck={false} maxLength={100} disabled={loading || busy} required
