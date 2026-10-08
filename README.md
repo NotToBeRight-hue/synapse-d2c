@@ -1,72 +1,66 @@
-api token to login GxUBGVhbh0pPCzHH61FP4NMY6dP4aLh1EnlOgpuODfk
+# Synapse-D2C: Next-Generation Autonomous Advertising Intelligence & Decision Engine
+Synapse-D2C is an AI-native advertising intelligence and autonomous decision-making system engineered for Direct-to-Consumer (D2C) brands. It bridges the gap between fragmented multi-channel advertising data and proactive budget optimization, replacing passive analytics dashboards with a closed-loop decision engine.
+# 🚀 Key Features & Capabilities
+Unified Cross-Platform Intelligence: Ingests, reconciles, and reasons across disparate ad platforms (Meta, Google), sales channels (Shopify), contribution margins, and ERP inventory stock levels.
 
+SciPy Optimization Core: Computes non-linear Hill-saturation diminishing-returns revenue curves using SciPy SLSQP optimization solvers to maximize net contribution profit under global budget ceilings.
 
-# Synapse D2C
+Inventory Safety Guardrails: Automatically starves products facing critical stockout risks (< 14 days inventory cover) from ad expenditure ($0.0 allocation floor).
 
-Starter scaffold for a FastAPI optimization engine and React dashboard, following the requested directory layout.
+Interactive Trading-Style Ticker Grid: Features compact financial efficiency cards with conditional metric tabs (Net contribution, ROAS, Revenue, Ad spend), time horizon toggles (7D, 30D, 90D), and click-to-open SKU inspector modal windows.
 
-## Status
+Diagnostic Anomaly Audit: Implements rolling statistical Z-score variance analysis to automatically tag performance shifts and anomalies across brand portfolios.
 
-The backend health endpoint and frontend welcome screen are implemented. Ingestion and simulation routes return HTTP 501. Database entities, provider adapters, Gemini recommendations and the mathematical solver remain explicit implementation stubs. No live integrations or optimization results are supplied.
+Enterprise Security & Audit Logging: Built with brand-scoped operator authentication, typable workspace IDs, Pydantic data validation, and persistent PostgreSQL simulation audit history.
+# Closed-Loop System Architecture
+Synapse-D2C maps the complete autonomous decision journey:
+Data -> Intelligence -> Reasoning -> Decision -> Action -> Feedback -> Learning
+Data: Structured JSON snapshot ingestion unifying ad spend, sales, margins, and ERP inventory.
 
-## Run with Docker
+Intelligence: Transforming raw multi-channel records into normalized performance vectors and velocity indicators.
 
-Install Docker with Compose and Node.js 22 or later. From this directory:
+Reasoning: Enforcing inventory safety guardrails (< 14 days stock cover threshold) and margin constraints.
 
-```powershell
-Copy-Item .env.example .env
-docker compose up --build
-```
+Decision: Running mathematical optimization solvers to generate ideal budget distribution curves.
 
-Backend docs: http://localhost:8000/docs
+Action: Dispatches structured actuator payloads and auditable decision records.
 
-Health endpoint: http://localhost:8000/health
+Feedback: Logging simulation outcomes and baseline-versus-optimized deltas into a persistent PostgreSQL database.
 
-Compose starts the backend and PostgreSQL; database tables are not created yet. Credentials and loopback ports are for local development only. Set deployment secrets separately before hosting.
+Learning: Auditing historical simulation logs to continuously refine decision models.
+# 🛠️ Technology Stack
 
-In a second terminal:
+Backend: Python 3.11+, FastAPI, Pydantic, SciPy, SQLAlchemy, PostgreSQL 16.
 
-```powershell
-cd frontend
-npm install
-npm run dev
-```
+Frontend: React 18, Vite, modern CSS custom properties with light/dark theme support.
 
-Open the local URL printed by Vite. The dashboard is a placeholder and does not call the backend yet.
+Deployment: Containerized via Docker Compose.
+# ⚙️ Quickstart & Local Deployment
+Prerequisites
+Docker & Docker Compose installed on your machine.
 
-## Run backend without Docker
+Node.js 18+ and Python 3.11+ (if running outside containers).
 
-Use Python 3.12 or later, with a reachable PostgreSQL instance when persistence is added:
+Running via Docker Compose
+Clone the public repository:
+            git clone https://github.com/your-username/synapse-d2c.git
+            cd synapse-d2c
+Configure your environment variables based on .env.example:
+Bash
+cp .env.example .env
+Build and launch the container stack:
+          docker compose up --build
+Access the Frontend Cockpit at http://localhost:5173 and the FastAPI Swagger Docs at http://localhost:8000/docs.
 
-```powershell
-cd backend
-py -3.12 -m venv .venv
-.\.venv\Scripts\python -m pip install -r requirements.txt
-.\.venv\Scripts\python -m uvicorn app.main:app --reload
-```
+# 📂 Repository Structure
+/synapse-d2c
+├── backend/                  # FastAPI service, SciPy solvers, database models, and routes
+├── frontend/                 # React Vite app, components, App.jsx, and dashboard styling
+├── presentation/             # PowerPoint presentation (.pptx) summarizing project architecture
+├── docker-compose.yml        # Multi-container orchestration stack
+├── README.md                 # System documentation
+└── .env.example              # Template for environment configuration
 
-Configuration reads process environment variables. The root `.env` is read by Compose; for a local Python run, set `$env:DATABASE_URL` and `$env:GEMINI_API_KEY` explicitly as needed.
+# 📄 Documentation & Presentation
+A detailed PowerPoint presentation outlining the 0-to-1 architecture, mathematical model, and business impact is available in the presentation/ directory.
 
-## Checks
-
-```powershell
-cd backend
-.\.venv\Scripts\python -m pytest
-```
-
-The solver test is intentionally skipped until implementation. Add numerical convergence, feasibility and API tests when implementing the engine.
-
-```powershell
-cd frontend
-npm run build
-```
-
-## Next implementation steps
-
-1. Define Brand, Campaign, Inventory and Metric entities and database migrations.
-2. Implement mock ingestion, followed by authenticated provider adapters.
-3. Specify campaign response curves, margins and budget/inventory constraints; implement and test SLSQP optimization.
-4. Connect simulation routes and Gemini recommendations to validated results.
-5. Replace the dashboard placeholder with metrics, scenario controls and allocation charts.
-
-SLSQP does not itself guarantee convexity; that property depends on the objective and constraints.
