@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from backend.app.core.scenarios import DEMO_SCENARIOS
+from ..core.scenarios import DEMO_SCENARIOS
 
 router = APIRouter()
 

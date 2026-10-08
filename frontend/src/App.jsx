@@ -1,20 +1,22 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import './dashboard.css';
 import synapseLogo from './assets/sys.png';
-import { api, validateSnapshot, validateSimulation, validateHistory, validateBrands, validateSession } from './api';
-import { amount, horizon } from './format';
+import { api, validateSnapshot, validateSimulation, validateBrands, validateSession } from './api';
+import { amount, horizon, stockDays } from './format';
 import { resolveOperator, initialTheme } from './dashboard-utils';
 import RevenueProfitView from './components/RevenueProfitView';
 import BudgetAllocationPanel from './components/BudgetAllocationPanel';
 import SourcePanel from './components/SourcePanel';
-import History from './components/History';
 import InventoryEditor from './components/InventoryEditor';
 import Diagnostics from './components/Diagnostics';
+import MonthComparison from './components/MonthComparison';
+import SkuCharts from './components/SkuCharts';
+import SkuExport from './components/SkuExport';
+import SidebarFooter from './components/SidebarFooter';
 
-export function Workspace({ session, onLogout, onRefresh, onSessionVerified, theme, onThemeChange }) {
+export function Workspace({ session, onLogout, onRefresh, onSessionVerified, theme, onThemeChange, onOpenAudit }) {
   const [snapshot, setSnapshot] = useState(null);
   const [simulation, setSimulation] = useState(null);
-  const [history, setHistory] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [loaded, setLoaded] = useState(false);
@@ -23,8 +25,6 @@ export function Workspace({ session, onLogout, onRefresh, onSessionVerified, the
   
   // View mode, Metric Tab, and Horizon state
   const [viewMode, setViewMode] = useState("cards"); // "cards" or "charts"
-  const [activeMetricTab, setActiveMetricTab] = useState("Net contribution");
-  const [timeHorizon, setTimeHorizon] = useState("30D");
   const [activeModalItem, setActiveModalItem] = useState(null);
 
   const currentSnapshot = useRef(null);
@@ -39,19 +39,17 @@ export function Workspace({ session, onLogout, onRefresh, onSessionVerified, the
 
   const refresh = useCallback(async signal => {
     const version = requestVersion.current;
-    const responses = await Promise.allSettled([
-      api('/sync/latest', { session, signal }).then(validateSnapshot),
-      api('/simulate/history', { session, signal }).then(validateHistory),
-    ]);
-    if (signal.aborted || !alive.current || version !== requestVersion.current) return;
-    const [source, audit] = responses;
-    if (source.status === 'fulfilled') {
-      setSnapshot(source.value);
-      if (currentSnapshot.current !== source.value.snapshot_id) {
-        setSimulation(null); currentSnapshot.current = source.value.snapshot_id;
+    try {
+      const source = validateSnapshot(await api('/sync/latest', { session, signal }));
+      if (signal.aborted || !alive.current || version !== requestVersion.current) return;
+      setSnapshot(source);
+      if (currentSnapshot.current !== source.snapshot_id) {
+        setSimulation(null); currentSnapshot.current = source.snapshot_id;
       }
-    } else if (source.reason.status !== 404) handleError(source.reason);
-    if (audit.status === 'fulfilled') setHistory(audit.value); else handleError(audit.reason);
+    } catch (e) {
+      if (signal.aborted || !alive.current || version !== requestVersion.current) return;
+      if (e.status !== 404) handleError(e);
+    }
     setLoaded(true);
   }, [session, handleError]);
 
@@ -89,8 +87,6 @@ export function Workspace({ session, onLogout, onRefresh, onSessionVerified, the
       }), snapshot.snapshot_id);
       if (!alive.current) return;
       setSimulation(result);
-      const updatedHistory = validateHistory(await api('/simulate/history', { session }));
-      if (alive.current) setHistory(updatedHistory);
     } catch (e) { handleError(e); }
     finally { inFlight.current = false; if (alive.current) setBusy(false); }
   }
@@ -113,11 +109,11 @@ export function Workspace({ session, onLogout, onRefresh, onSessionVerified, the
   const revenue = rows.reduce((sum, row) => sum + row.revenue, 0);
   const spend = rows.reduce((sum, row) => sum + row.spend, 0);
   const profit = rows.reduce((sum, row) => sum + row.revenue * row.margin - row.spend, 0);
-  const protectedCount = new Set(rows.filter(row => horizon(row) !== null && horizon(row) < 14).map(row => row.sku)).size;
+  const protectedCount = new Set(rows.filter(row => row.inventory_data_missing || horizon(row) !== null && horizon(row) < 14).map(row => row.sku)).size;
   
   return <div className="shell"><aside className="sidebar"><button type="button" className="wordmark" onClick={onRefresh} disabled={busy} aria-label="Refresh dashboard" title="Refresh dashboard">SYNAPSE<span aria-hidden="true">&nbsp;</span></button>
     <div className="workspace-label">WORKSPACE</div><strong className="brand-name">{session.brand.name}</strong>
-    <nav><a href="#overview">Overview</a><a href="#revenue">SKU performance</a><a href="#allocation">Budget allocation</a><a href="#diagnostics">Diagnostics</a><a href="#history">Decision audit</a></nav>
+    <nav><a href="#overview">Overview</a><a href="#revenue">SKU Performance</a><a href="#allocation">Budget Allocation</a><a href="#diagnostics">Diagnostics</a><a href="#monthly">Month Comparison</a><a href="/decision.html" onClick={onOpenAudit}>Decision Audit</a></nav><SidebarFooter />
   </aside><main className="main"><header className="topbar"><div><span className="header-context">Advertising Decision Cockpit</span></div><div className="header-controls">
     <form className="operator-control" onSubmit={verifyOperator}>
       <label htmlFor="header-operator">Operator / workspace ID</label><input id="header-operator" type="text" value={operatorInput}
@@ -125,177 +121,47 @@ export function Workspace({ session, onLogout, onRefresh, onSessionVerified, the
         title="Enter this workspace's provisioned ID or profile name. Sign in again to change workspace access." />
       <button className="button" disabled={busy || !operatorInput.trim()}>Verify</button>
       <span className={'operator-confirmation ' + (operatorVerified ? 'healthy' : 'muted')} role="status">{operatorVerified ? 'Workspace verified' : 'Edit pending verification'}</span>
-    </form></span><ThemeToggle theme={theme} onChange={onThemeChange} /></div></header>
-    <div className="content" id="overview"><div className="page-heading"><div><span className="eyebrow">BRAND = {session.brand.name}</span><h1>Contribution & allocation</h1>
-      <p className="muted"></p></div><SourcePanel busy={busy} onSync={sync} onError={setError} /></div>
+    </form><ThemeToggle theme={theme} onChange={onThemeChange} /></div></header>
+    <div className="content" id="overview"><div className="page-heading"><div><h1>Contribution & allocation</h1>
+      </div><SourcePanel busy={busy} onSync={sync} onError={setError} /></div>
       {error && <div className="notice error" role="alert">{error}</div>}
-      <div className="snapshot-line"><span className="label">{snapshot ? snapshot.data_mode === 'mock' ? 'MOCK DATA' : 'UPLOADED SNAPSHOT' : 'NO DATA'}</span>
-        <span className="muted">{snapshot ? 'Snapshot #' + snapshot.snapshot_id + ' / checked every 30 seconds' : loaded ? 'Import your source data to begin.' : 'Loading workspace...'}</span></div>
-      <section className="stats-grid" aria-label="Current snapshot metrics">{[
+      <div className="snapshot-line"><span className="label">{snapshot ? snapshot.data_mode === 'mock' ? 'MOCK DATA' : 'UPLOADED DATA' : 'NO DATA'}</span>
+        <span className="muted">{snapshot ? 'Source data loaded' : loaded ? 'Import your source data to begin.' : 'Loading workspace...'}</span></div>
+      <section className="stats-grid" aria-label="Current source metrics">{[
         ['Attributed revenue', revenue], ['Ad spend', spend], ['Net contribution', profit], ['Protected SKUs', protectedCount],
       ].map(([label, value]) => <article className="stat-card" key={label}><span>{label}</span><strong>{snapshot ? amount(value) : 'No data'}</strong>
-        <small>{label === 'Protected SKUs' ? 'Missing inventory or below 14 days' : 'Current source snapshot'}</small></article>)}</section>
-      {protectedCount > 0 && <p className="notice warning" role="status">{protectedCount} SKU(s) have missing inventory or stock cover below 14 days. Their optimized allocation is fixed at zero.</p>}
+        <small>{label === 'Protected SKUs' ? 'Missing inventory or below 14 days' : 'Imported data'}</small></article>)}</section>
       <InventoryEditor key={'inventory-' + (snapshot?.snapshot_id || 'empty')} snapshot={snapshot} busy={busy}
         onSave={payload => sync(payload, '/sync/inventory', 'PATCH')} onError={setError} />
+      {protectedCount > 0 && <p className="notice warning" role="status">{protectedCount} SKU(s) have missing inventory or stock cover below 14 days. Their optimized allocation is fixed at zero.</p>}
       
-      {/* View Mode Toggle Controls */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' }}>
-        <div style={{ display: 'inline-flex', background: 'var(--panel-bg, #1e293b)', padding: '2px', borderRadius: '4px', border: '1px solid var(--border-color, #334155)' }}>
-          <button 
-            type="button" 
-            onClick={() => setViewMode('cards')}
-            style={{ padding: '6px 14px', background: viewMode === 'cards' ? 'var(--accent-bg, #0f172a)' : 'transparent', color: '#fff', border: 'none', borderRadius: '3px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
-          >
-            Card View
-          </button>
-          <button 
-            type="button" 
-            onClick={() => setViewMode('charts')}
-            style={{ padding: '6px 14px', background: viewMode === 'charts' ? 'var(--accent-bg, #0f172a)' : 'transparent', color: '#fff', border: 'none', borderRadius: '3px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
-          >
-            Financial Ticker View
-          </button>
-        </div>
+      <div className="chart-controls view-controls" aria-label="SKU view">
+        <button type="button" className="button" aria-pressed={viewMode === 'cards'} onClick={() => setViewMode('cards')}>Card view</button>
+        <button type="button" className="button" aria-pressed={viewMode === 'charts'} onClick={() => setViewMode('charts')}>Chart view</button>
       </div>
+      {viewMode === 'charts' ? <SkuCharts campaigns={rows} snapshot={snapshot} onInspect={setActiveModalItem} />
+        : <RevenueProfitView campaigns={rows} snapshot={snapshot} />}
 
-      {viewMode === 'charts' ? (
-        <section id="revenue" style={{ marginBottom: '24px' }}>
-          {/* Trading-Style Header & Horizon Toggles */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '16px', borderBottom: '1px solid #334155', paddingBottom: '12px' }}>
-            <div>
-              <h2 style={{ margin: '0 0 4px 0', fontSize: '18px', color: '#f8fafc' }}>SKU Performance Grid</h2>
-              <p style={{ margin: 0, fontSize: '12px', color: '#94a3b8' }}>Compact trading-style efficiency cards</p>
-            </div>
-            <div style={{ display: 'flex', gap: '6px', background: '#1e293b', padding: '3px', borderRadius: '6px', border: '1px solid #334155' }}>
-              {['7D', '30D', '90D'].map(h => (
-                <button
-                  key={h}
-                  type="button"
-                  onClick={() => setTimeHorizon(h)}
-                  style={{
-                    background: timeHorizon === h ? '#334155' : 'transparent',
-                    border: 'none',
-                    color: timeHorizon === h ? '#f8fafc' : '#94a3b8',
-                    padding: '4px 10px',
-                    borderRadius: '4px',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    cursor: 'pointer'
-                  }}
-                >
-                  {h}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Metric Selector Pill Tabs (Visible ONLY in Financial Ticker View) */}
-          <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
-            {['Net contribution', 'ROAS', 'Revenue', 'Ad spend'].map(tab => (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => setActiveMetricTab(tab)}
-                style={{
-                  background: activeMetricTab === tab ? '#1e293b' : 'transparent',
-                  border: '1px solid',
-                  borderColor: activeMetricTab === tab ? '#38bdf8' : '#334155',
-                  color: activeMetricTab === tab ? '#f8fafc' : '#94a3b8',
-                  padding: '6px 16px',
-                  borderRadius: '20px',
-                  fontSize: '13px',
-                  fontWeight: activeMetricTab === tab ? 600 : 400,
-                  cursor: 'pointer'
-                }}
-              >
-                {tab}
-              </button>
-            ))}
-          </div>
-
-          {/* Candlestick Ticker Grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
-            {rows.map((item, idx) => {
-              const netContrib = item.revenue * item.margin - item.spend;
-              const roas = item.spend > 0 ? (item.revenue / item.spend).toFixed(2) : '0.00';
-              const stockHorizon = horizon(item);
-              const isRisk = stockHorizon !== null && stockHorizon < 14;
-              const isMissing = stockHorizon === null;
-
-              return (
-                <div 
-                  key={idx} 
-                  onClick={() => setActiveModalItem(item)}
-                  style={{ 
-                    background: '#0f172a', 
-                    border: '1px solid #334155', 
-                    borderRadius: '6px', 
-                    padding: '20px', 
-                    cursor: 'pointer'
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                    <div>
-                      <h4 style={{ margin: '0 0 4px 0', color: '#f8fafc', fontSize: '15px' }}>{item.sku}</h4>
-                      <span style={{ fontSize: '12px', color: '#94a3b8' }}>ROAS {roas}×</span>
-                    </div>
-                    <span style={{ color: '#94a3b8', fontSize: '12px' }}>v</span>
-                  </div>
-
-                  <div style={{ margin: '12px 0' }}>
-                    <span style={{ fontSize: '12px', color: '#94a3b8', display: 'block' }}>{activeMetricTab}</span>
-                    <strong style={{ fontSize: '20px', color: netContrib < 0 ? '#f43f5e' : '#f8fafc' }}>
-                      {activeMetricTab === 'Net contribution' ? amount(netContrib) :
-                       activeMetricTab === 'ROAS' ? `${roas}×` :
-                       activeMetricTab === 'Revenue' ? amount(item.revenue) : amount(item.spend)}
-                    </strong>
-                  </div>
-
-                  {/* Financial Candlestick SVG Mockup */}
-                  <svg viewBox="0 0 300 70" style={{ width: '100%', height: '70px', margin: '8px 0' }}>
-                    <path d="M 0 50 Q 75 10, 150 35 T 300 20" fill="none" stroke="#38bdf8" strokeWidth="2" />
-                    {[[30, 40, 20, '#34d399'], [70, 55, 30, '#f43f5e'], [110, 45, 25, '#34d399'], [150, 35, 15, '#34d399'], [190, 48, 35, '#f43f5e'], [230, 30, 20, '#34d399'], [270, 25, 10, '#34d399']].map(([x, cy, h, color], cIdx) => (
-                      <g key={cIdx}>
-                        <line x1={x} y1={cy - h - 5} x2={x} y2={cy + h + 5} stroke={color} strokeWidth="1.5" />
-                        <rect x={x - 4} y={cy - h/2} width="8" height={h} fill={color} rx="1" />
-                      </g>
-                    ))}
-                  </svg>
-
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px', paddingTop: '10px', borderTop: '1px solid #1e293b', fontSize: '12px' }}>
-                    <span style={{ color: '#94a3b8' }}>Margin {Math.round(item.margin * 100)}%</span>
-                    <span style={{ color: isRisk ? '#f43f5e' : isMissing ? '#fbbf24' : '#34d399', fontWeight: 500 }}>
-                      {isRisk ? 'Critical stock risk' : isMissing ? 'Inventory missing' : `${stockHorizon} days cover`}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      ) : (
-        <RevenueProfitView campaigns={rows} />
-      )}
-
+      <SkuExport campaigns={rows} snapshot={snapshot} />
       <BudgetAllocationPanel key={snapshot?.snapshot_id || 'empty'} snapshot={snapshot} simulation={simulation} busy={busy} onRun={run} limits={session} />
       <Diagnostics snapshot={snapshot} />
-      <History rows={history} />
-      <footer>Projections are modeled estimates. No ad-platform budgets are changed automatically.</footer>
-    </div></main>
+      <MonthComparison session={session} disabled={busy} onAuthError={handleError} />
+
+    </div>
+    </main>
 
     {/* Floating Modal Inspector */}
     {activeModalItem && (
       <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
         <div style={{ background: '#0f172a', border: '1px solid #334155', padding: '24px', borderRadius: '6px', width: '420px', color: '#f8fafc' }}>
-          <h3 style={{ margin: '0 0 4px 0', color: '#f8fafc' }}>Channel Inspector: {activeModalItem.sku}</h3>
-          <p style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '16px' }}>Detailed financial breakdown and metrics snapshot.</p>
+          <h3 style={{ margin: '0 0 4px 0', color: '#f8fafc' }}>Product inspector: {activeModalItem.sku}</h3>
+          <p style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '16px' }}>Detailed financial breakdown from imported data.</p>
           
           <div style={{ background: '#1e293b', padding: '16px', borderRadius: '4px', fontSize: '13px', marginBottom: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: '#94a3b8' }}>Revenue:</span> <strong>{amount(activeModalItem.revenue)}</strong></div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: '#94a3b8' }}>Ad Spend:</span> <strong>{amount(activeModalItem.spend)}</strong></div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: '#94a3b8' }}>Contribution Margin:</span> <strong>{Math.round(activeModalItem.margin * 100)}%</strong></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: '#94a3b8' }}>Stock Cover Horizon:</span> <strong>{horizon(activeModalItem) !== null ? `${horizon(activeModalItem)} days` : '0 days'}</strong></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: '#94a3b8' }}>Stock Cover Horizon:</span> <strong>{horizon(activeModalItem) !== null ? stockDays(horizon(activeModalItem)) : activeModalItem.inventory_data_missing ? 'Not supplied' : 'No recent velocity'}</strong></div>
           </div>
 
           <button 
@@ -362,15 +228,56 @@ export function OperatorLogin({ onLogin = () => {} }) {
       {loading ? 'Loading workspaces...' : busy ? 'Verifying access...' : 'Sign in'}
     </button>
     {!loading && !brands.length && <p className="muted">No workspaces provisioned. Create a brand using the README instructions.</p>}
-    <p className="portal-security">Brand-scoped authentication. Credentials remain in memory for this session.</p>
+
   </form></div></main>;
 }
 
-export default function App() {
+export default function App({ WorkspaceView = Workspace, decisionPage = false }) {
   const [session, setSession] = useState(null);
   const [theme, setTheme] = useState(initialTheme);
   const [workspaceRevision, setWorkspaceRevision] = useState(0);
-  const logout = useCallback(() => setSession(null), []);
+  const auditWindows = useRef(new Set());
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
+  const authGeneration = useRef(0);
+  const logout = useCallback(() => {
+    authGeneration.current += 1;
+    setSession(null);
+    for (const child of auditWindows.current) if (!child.closed) child.postMessage({type: 'synapse:signout'}, window.location.origin);
+    auditWindows.current.clear();
+    if (decisionPage && window.opener) window.opener.postMessage({type: 'synapse:audit-signout'}, window.location.origin);
+  }, [decisionPage]);
+  function openAudit(event) {
+    const child = window.open('/decision.html', '_blank');
+    if (child) { auditWindows.current.add(child); event.preventDefault(); }
+  }
+  useEffect(() => {
+    const controller = new AbortController();
+    const origin = window.location.origin;
+    async function receive(event) {
+      if (event.origin !== origin) return;
+      if (!decisionPage) {
+        if (!auditWindows.current.has(event.source)) return;
+        if (event.data?.type === 'synapse:audit-ready' && sessionRef.current) {
+          event.source.postMessage({type: 'synapse:audit-session', session: sessionRef.current}, origin);
+        } else if (event.data?.type === 'synapse:audit-signout') logout();
+      } else if (event.source === window.opener) {
+        if (event.data?.type === 'synapse:signout') { authGeneration.current += 1; setSession(null); return; }
+        if (event.data?.type !== 'synapse:audit-session') return;
+        const candidate = event.data.session;
+        const generation = ++authGeneration.current;
+        try {
+          if (!candidate || typeof candidate.token !== 'string') return;
+          validateSession(candidate);
+          const profile = validateSession(await api('/auth/me', {session: candidate, signal: controller.signal}));
+          if (!controller.signal.aborted && generation === authGeneration.current && profile.brand.id === candidate.brand.id) setSession({...profile, token: candidate.token, operator: candidate.operator});
+        } catch { /* Manual sign-in stays available if session verification fails. */ }
+      }
+    }
+    window.addEventListener('message', receive);
+    if (decisionPage && window.opener) window.opener.postMessage({type: 'synapse:audit-ready'}, origin);
+    return () => { controller.abort(); window.removeEventListener('message', receive); };
+  }, [decisionPage, logout]);
   const refreshWorkspace = useCallback(() => setWorkspaceRevision(value => value + 1), []);
   const toggleTheme = useCallback(() => setTheme(value => value === 'dark' ? 'light' : 'dark'), []);
   useEffect(() => {
@@ -378,10 +285,11 @@ export default function App() {
     try { localStorage.setItem('synapse-theme', theme); } catch { /* Storage can be unavailable. */ }
   }, [theme]);
   return <div className="app-root" data-theme={theme}>
-    {session ? <Workspace key={workspaceRevision} session={session} onLogout={logout} onRefresh={refreshWorkspace}
-      onSessionVerified={setSession} theme={theme} onThemeChange={toggleTheme} /> : <><header className="login-header"><span>SYNAPSE</span>
+    {session ? <WorkspaceView key={workspaceRevision} session={session} onLogout={logout} onRefresh={refreshWorkspace}
+      onSessionVerified={setSession} onOpenAudit={openAudit} theme={theme} onThemeChange={toggleTheme} /> : <><header className="login-header"><span>SYNAPSE</span>
       <ThemeToggle theme={theme} onChange={toggleTheme}/></header><OperatorLogin onLogin={setSession}/></>}
     {session ? <button type="button" className="logo-dock" onClick={logout} aria-label="Sign out" title="Sign out"><img src={synapseLogo} alt="Synapse" /></button>
       : <aside className="logo-dock" aria-label="Synapse brand"><img src={synapseLogo} alt="Synapse" /></aside>}
   </div>;
 }
+

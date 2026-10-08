@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from backend.solver.optimizer import optimize_ad_spend_hill
+from ..solver.optimizer import optimize_ad_spend_hill
 
 router = APIRouter()
 

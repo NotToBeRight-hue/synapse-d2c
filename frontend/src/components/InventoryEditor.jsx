@@ -47,7 +47,7 @@ export default function InventoryEditor({ snapshot = null, busy = false, onSave 
           value={values[row.sku].velocity} onChange={event => change(row.sku, 'velocity', event.target.value)} /></label>
       </fieldset>)}</div>
       <button className="button primary" disabled={busy}>{busy ? 'Saving...' : 'Save inventory'}</button>
-      <p className="fine-print">This saves a new inventory snapshot and preserves your ad and sales data. Run the simulation again after saving.</p>
+      <p className="fine-print">This updates inventory and preserves your ad and sales data. Run the simulation again after saving.</p>
     </form>
   </details>;
 }

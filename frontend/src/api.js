@@ -60,6 +60,39 @@ export function validateSession(data) {
   requireValue(number(data.simulation_limit_per_hour) && number(data.ai_limit_per_day));
   return data;
 }
+const reportingMonth = value => text(value) && /^[1-9][0-9]{3}-(0[1-9]|1[0-2])$/.test(value);
+export function validateMonths(data) {
+  requireValue(Array.isArray(data));
+  data.forEach(row => requireValue(object(row) && reportingMonth(row.reporting_month) && positiveId(row.report_id)
+    && text(row.created_at) && ['mock', 'uploaded'].includes(row.data_mode)));
+  return data;
+}
+export function validateComparison(data) {
+  requireValue(object(data) && object(data.changes));
+  const financial = row => {
+    requireValue(object(row) && number(row.revenue) && row.revenue >= 0 && number(row.spend) && row.spend >= 0
+      && number(row.contribution) && nullableNumber(row.margin) && nullableNumber(row.roas));
+    requireValue(row.margin === null || (row.margin >= 0 && row.margin <= 1));
+    requireValue(row.roas === null || row.roas >= 0);
+  };
+  for (const key of ['month1', 'month2']) {
+    const month = data[key];
+    validateMonths([month]);
+    financial(month.totals);
+    requireValue(Array.isArray(month.products));
+    month.products.forEach(row => {
+      financial(row);
+      requireValue(text(row.sku) && typeof row.inventory_data_missing === 'boolean' && nullableNumber(row.stock_days));
+      requireValue(row.stock_days === null || row.stock_days >= 0);
+    });
+  }
+  for (const key of ['revenue', 'spend', 'contribution']) {
+    const change = data.changes[key];
+    requireValue(object(change) && number(change.absolute) && nullableNumber(change.percent));
+  }
+  for (const change of Object.values(data.changes)) requireValue(object(change) && number(change.absolute) && nullableNumber(change.percent));
+  return data;
+}
 export async function api(path, { session, method = 'GET', body, signal } = {}) {
   const controller = new AbortController();
   const cancel = () => controller.abort();

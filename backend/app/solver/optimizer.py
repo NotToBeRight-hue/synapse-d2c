@@ -16,7 +16,7 @@ def optimize_ad_spend_hill(spends, revenues, margins, inventory_days, max_total_
     
     # 2. Objective Function: Maximize Net Contribution Profit
     def objective(x):
-        n_coeff = 1.4  curvature parameter for sigmoidal shape
+        n_coeff = 1.4  # curvature parameter for sigmoidal shape
         numerator = r_max * (x ** n_coeff)
         denominator = (k_half ** n_coeff) + (x ** n_coeff)
         projected_revenue = numerator / (denominator + 1e-6)
@@ -55,7 +55,7 @@ def optimize_ad_spend_hill(spends, revenues, margins, inventory_days, max_total_
             
         res = minimize(objective, x0, method='SLSQP', bounds=bounds, constraints=cons, options={'maxiter': 500})
         if res.success and res.fun < best_fun:
-                            best_fun = res.fun
+            best_fun = res.fun
             best_result = res
 
     if best_result is None or not best_result.success:
